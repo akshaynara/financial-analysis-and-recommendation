@@ -4,6 +4,7 @@ from datetime import date,timedelta
 from dotenv import load_dotenv
 import os
 import streamlit as st
+import requests
 
 load_dotenv()
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
@@ -13,8 +14,45 @@ st.set_page_config(page_title = "Market Trends Analyst", layout = "centered")
 st.title("Your Financial Advisor")
 st.write('Hello, I am your financial advisor. I will give you a complete analysis of your stock or organisation. I will also recomment you if you should Buy/ Sell or Hold the stock :sunglasses:')
 
+def get_gainers(number):
+    response_gainers = requests.get("https://financialmodelingprep.com/stable/biggest-gainers?apikey=iifNjIBLSqHJ0q8wO57yE87LhNZ762yf").json()
+    print(response_gainers)
+    count = 0
+    gainers = []
+    for response in response_gainers:
+        if count<number:
+            gainers.append({"name":response["name"],
+                            "percentage":response["changesPercentage"]})
+            count+=1
+    return gainers
+    
+def get_losers(number):
+    response_losers = requests.get("https://financialmodelingprep.com/stable/biggest-losers?apikey=iifNjIBLSqHJ0q8wO57yE87LhNZ762yf").json()
+    count = 0
+    losers = []
+    for response in response_losers:
+        if count<number:
+            losers.append({"name":response["name"],
+                            "percentage":response["changesPercentage"]})
+            count+=1
+    return losers
+
+get_gainers(5)
+with st.sidebar:
+    st.title("Top 5 gainers:")
+    for gainer in get_gainers(5):
+        st.markdown(
+    ":green-badge["+gainer['name']+"] :blue-badge[+"+str(gainer['percentage'])+"%]"
+        )
+    st.title("Top 5 losers:")
+    for losers in get_losers(5):
+        st.markdown(
+    ":red-badge["+losers['name']+"] :blue-badge["+str(losers['percentage'])+"%]"
+        )
+
 inputStock = st.text_input("Enter your Organisation:")
-# if user_name:
+
+
 
 if st.button("Submit", type="primary"):
     llm = LLM(model = "groq/openai/gpt-oss-120b",
@@ -22,7 +60,8 @@ if st.button("Submit", type="primary"):
             # max_completion_tokens = 256,
             top_p = 0.9
         )
-    
+
+     
     @tool("get_articles_APItube")
     def get_articles_APItube(entity: str) -> list[list]:
       """
@@ -96,11 +135,9 @@ if st.button("Submit", type="primary"):
     
     collector = Agent(
         role = "Articles collector",
-        goal = "Asks the user about the {topic} and collects the articles releated to that topic using tools.",
+        goal = "Asks the user about the {topic} and collects the articles releated to that topic.",
         backstory = "The {topic} will be an organisation of stock name. Don't take any other input except topic"
-                    "Use the tool 'get_articles_APItube' to fetch the articles.\n"
-                    "Give the total number of articles collected.",
-        tools = [get_articles_APItube],
+                    "fetch the articles.\n",
         llm = llm,
         allow_delegation = False,
         verbose = False
@@ -132,7 +169,7 @@ if st.button("Submit", type="primary"):
     collect = Task(
         description = (
             "1. The {topic} will be an organisation of stock name.\n"
-            "2. Use the tool to collect all the news articles on the provided {topic} using tool 'get_articles_APItube'.\n"
+            "2. collect all the news articles on the provided {topic}.\n"
             "3. Prioritize the latest trends and news on the {topic}.\n"
         ),
         expected_output = "Articles related to the organisation or stock given by the user\n",
@@ -172,7 +209,6 @@ if st.button("Submit", type="primary"):
         response = crew.kickoff(inputs = {"topic": inputStock})
         st.write("You entered: ", inputStock)
         st.write("Result:", response.raw)
-    
         
     except Exception as e:
         st.write(f"An error occured: {e}")
